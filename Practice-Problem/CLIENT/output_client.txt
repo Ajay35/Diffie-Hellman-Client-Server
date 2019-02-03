@@ -1,0 +1,8 @@
+[akdas@localhost CLIENT]$ ./a.out 127.0.0.1
+******* This is demo program using sockets ***** 
+
+Connected to server
+Sending the request message REQ to the server
+Message:: with opcode 20 (REP) received from source (-1)
+Message REQ has received successfully by the server
+
