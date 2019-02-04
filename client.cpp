@@ -79,8 +79,6 @@ string encrypt_util(string input,ll caesar_key){
 			}	
 		}	
 	}
-  cout<<"original:"<<input<<endl;
-  cout<<"encrypted:"<<s<<endl;
 	return s;
 }
 
@@ -100,6 +98,7 @@ EncMsg encrypt_msg(Msg send_msg,ll caesar_key)
     strcpy(enc_msg.ID,userid.c_str());
     strcpy(enc_msg.password,password.c_str());
     strcpy(enc_msg.q,prime.c_str());
+    return enc_msg;
   }
   else if(send_msg.hdr.opcode==30){
     string op_code=to_string(send_msg.hdr.opcode);
@@ -111,7 +110,8 @@ EncMsg encrypt_msg(Msg send_msg,ll caesar_key)
     strcpy(enc_msg.hdr.opcode,op_code.c_str());
     strcpy(enc_msg.ID,userid.c_str());
     strcpy(enc_msg.password,password.c_str());
-    }
+    return enc_msg;
+  }
 
   else if(send_msg.hdr.opcode==50){
 
@@ -120,11 +120,10 @@ EncMsg encrypt_msg(Msg send_msg,ll caesar_key)
 }
 
 Msg decrypt_msg(EncMsg recv_msg,ll caesar_key){
+  
     Msg msg;
     string temp(recv_msg.hdr.opcode);
     string status(recv_msg.status);
-    cout<<recv_msg.status<<endl;
-    cout<<"encryped status:"<<status<<endl;
     msg.hdr.opcode=atoi(decrypt_util(temp,caesar_key).c_str());
     strcpy(msg.status,decrypt_util(status,caesar_key).c_str());
     return msg;
@@ -159,7 +158,7 @@ int server_connect(char *sip)
    
    client_fd=socket(AF_INET,SOCK_STREAM,0);
    if(client_fd==-1){
-      fprintf (stderr, "*** Client error: unable to get socket descriptor\n");
+      fprintf (stderr, "Client error: unable to get socket descriptor\n");
       exit(1);
    }
 
@@ -211,25 +210,29 @@ void communicate_with_server(int cfd,ll caesar_key){
         }
      }
     else if(ch==2){
-      cout<<"AUTH REQUEST"<<endl;
-        Msg send_msg,recv_msg;
-        string ID,password;
-        send_msg.hdr.opcode=30;
-        cout<<"Enter user ID"<<endl;
-        cin>>ID;
-        cout<<"Enter user password"<<endl;
-        cin>>password;
-        strcpy(send_msg.ID,ID.c_str());  
-        strcpy(send_msg.password,password.c_str());  
-        EncMsg enc_msg=encrypt_msg(send_msg,caesar_key);
-        status=send(cfd, &enc_msg,sizeof(enc_msg),0);
-        if (status <= 0) {
-            fprintf(stderr, "Client error: unable to send\n");
-            return;
-        }
+      cout<<"****************AUTH REQUEST***************"<<endl;
+      Msg send_msg,recv_msg;
+      string ID,password;
+      send_msg.hdr.opcode=30;
+      send_msg.hdr.s_addr=1;
+      send_msg.hdr.d_addr=2;
+      cout<<"Enter user ID"<<endl;
+      cin>>ID;
+      cout<<"Enter user password"<<endl;
+      cin>>password;
+      strcpy(send_msg.ID,ID.c_str());  
+      strcpy(send_msg.password,password.c_str());  
+      EncMsg enc_msg=encrypt_msg(send_msg,caesar_key);
+      status=send(cfd, &enc_msg,sizeof(enc_msg),0);
+      if (status <= 0) {
+          fprintf(stderr, "Client error: unable to send\n");
+          return;
+      }
+      cout<<"***************************"<<endl;
     }
     else{
-      exit(0);
+      cout<<"wrong choice:"<<endl;
+      continue;
     }
 
     EncMsg recv_msg;
@@ -238,10 +241,6 @@ void communicate_with_server(int cfd,ll caesar_key){
         fprintf(stderr, "Client error: unable to receive\n");
         break;
     }
-    cout<<"Data received in bytes:"<<nbytes<<endl;
-    
-    
-
 
     /* decrypt here (according to header of msg)*/
     Msg dec_recv_msg=decrypt_msg(recv_msg,caesar_key);
@@ -251,23 +250,24 @@ void communicate_with_server(int cfd,ll caesar_key){
       cout<<"LOGIN REPLY:"<<endl;
       string test(dec_recv_msg.status);
       if(test=="NO"){
-        cout<<"LOGIN FAILED"<<endl;
+        cout<<"xxxxxxxxxxx-----------LOGIN FAILED-------------xxxxxxxxxxxxxx"<<endl;
       }
       else if(test=="YES"){
-        cout<<"LOGIN SUCCESSFUL"<<endl;
+        cout<<"*******************LOGIN SUCCESSFUL*****************"<<endl;
       }
       else{
         cout<<"INVALID RESPONSE"<<endl;
       }
     }  
     else if(dec_recv_msg.hdr.opcode==40){
-      cout<<"AUTH REPLY:"<<endl;
-      if(dec_recv_msg.status==0){
-        cout<<"AUTH FAILED"<<endl;
-      }
-      else{
-        string file_name;
-        cout<<"AUTH SUCCESSFUL"<<endl;
+        cout<<"AUTH REPLY:"<<endl;
+        string test(dec_recv_msg.status);
+        if(test=="NO"){
+          cout<<"xxxxxxxx-------AUTH FAILED----xxxxxxxxxxx"<<endl;
+        }
+        else if(test=="YES"){
+          string file_name;
+          cout<<"****************AUTH SUCCESSFUL************"<<endl;
         /*Msg send_msg,recv_msg;
         send_msg.hdr.opcode=50;
         cout<<"Enter file name:"<<endl;
@@ -305,7 +305,7 @@ int main(int argc, char* argv[]){
   char server_ip[16];
   int client_fd;
 
-
+  cout<<"***************** KEY EXCHANGE STARTS **************************"<<endl;
   ll prime=get_prime();
   cout<<"Prime number chosen:"<<prime<<endl;
   
@@ -327,7 +327,6 @@ int main(int argc, char* argv[]){
   send(client_fd,cs_buf,strlen(cs_buf),0);
   memset(sc_buf,0,sizeof(sc_buf));
   recv(client_fd,sc_buf,sizeof(sc_buf),0);
-  //sc_buf[i]='\0';
 
   int i=0,j=0;
   char temp[MAX_LEN];
@@ -344,7 +343,7 @@ int main(int argc, char* argv[]){
   cout<<shared_key_client<<endl;
   ll caesar_key=shared_key_client%66;
   cout<<"Caesar key:"<<caesar_key<<endl;
-  cout<<"Key exhange finished"<<endl;
+  cout<<"***************** KEY EXCHANGE FINISHED **************************"<<endl;
   communicate_with_server(client_fd,caesar_key);
   close(client_fd);
 

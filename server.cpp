@@ -87,7 +87,6 @@ EncMsg encrypt_msg(Msg send_msg,ll caesar_key)
 
 
 string encrypt_util(string input,ll caesar_key){
-  cout<<input<<endl;
   int n=input.size();
   string s;
   s.resize(n,' ');
@@ -121,10 +120,12 @@ Msg decrypt_msg(EncMsg enc_msg,ll caesar_key){
       strcpy(dec_msg.password,decrypt_util(password,caesar_key).c_str());
       dec_msg.q=atoll(decrypt_util(q,caesar_key).c_str());
   }
-  else if(enc_msg.hdr.opcode=="30"){
-
+  else if(op_code==30){
+      dec_msg.hdr.opcode=op_code;
+      strcpy(dec_msg.ID,decrypt_util(userid,caesar_key).c_str());
+      strcpy(dec_msg.password,decrypt_util(password,caesar_key).c_str());
   }
-  else if(enc_msg.hdr.opcode=="50"){
+  else if(op_code==50){
 
   }
 
@@ -262,8 +263,7 @@ void comm_with_client(int cfd,ll caesar_key){
     Msg dec_recv_msg,send_msg;
     EncMsg enc_send_msg,enc_recv_msg;
     nbytes=recv(cfd,&enc_recv_msg,sizeof(enc_recv_msg),0);
-    cout<<"received encrypted message bytes from client:"<<nbytes<<endl;
-     if (nbytes<=0){
+    if (nbytes<=0){
        fprintf(stderr, "Server error: unable to receive\n");
        //exit(EXIT_FAILURE);
        break;
@@ -272,15 +272,13 @@ void comm_with_client(int cfd,ll caesar_key){
       dec_recv_msg=decrypt_msg(enc_recv_msg,caesar_key);
       int opcode=dec_recv_msg.hdr.opcode;
 
-      cout<<"opcode received:"<<opcode<<endl;
-
-
       if(opcode==10){
+        cout<<"**********************LOGIN CREATE REQUEST****************"<<endl;
+        cout<<"Decrypted data"<<endl;
         cout<<"opcode:"<<dec_recv_msg.hdr.opcode<<endl;
         string userid(dec_recv_msg.ID);
         string password(dec_recv_msg.password);
         ll q=dec_recv_msg.q;
-        cout<<"Decrypted data"<<endl;
         cout<<"User id:"<<userid<<endl;
         cout<<"password:"<<password<<endl;
         cout<<"Prime:"<<q<<endl;
@@ -298,9 +296,6 @@ void comm_with_client(int cfd,ll caesar_key){
           int nbytes=send(cfd,&enc_send_msg,sizeof(enc_send_msg),0);
           if(nbytes<=0){
             cout<<"Failed to send data to client"<<endl;
-          }
-          else{
-            cout<<"Data sent to client:"<<nbytes<<endl;
           }
         }
         else{
@@ -324,16 +319,14 @@ void comm_with_client(int cfd,ll caesar_key){
           if(nbytes<=0){
             cout<<"Failed to send data to client"<<endl;
           }
-          else{
-            cout<<"Data sent to client:"<<nbytes<<endl;
-          }
         }
       }
       else if(opcode==30){
-        cout<<"AUTH REQUEST"<<endl;
+        cout<<"*****************AUTH REQUEST*******************"<<endl;
         string userid(dec_recv_msg.ID);
         string password(dec_recv_msg.password);
         ll q=dec_recv_msg.q;
+        cout<<"***************Decrypted data*****************"<<endl;
         cout<<"User id:"<<userid<<endl;
         cout<<"password:"<<password<<endl;
 
@@ -343,10 +336,11 @@ void comm_with_client(int cfd,ll caesar_key){
           if(userid==users[i].userid){
             found=true;
             temp=users[i];
+            break;
           }
         }
-        if(found){
-          cout<<"User does not exist"<<endl;
+        if(!found){
+          cout<<"xxxxxxxxxx-----------User does not existxxxxxxxxxxx---------------"<<endl;
           send_msg.hdr.opcode=40;
           string rep="NO";
           strcpy(send_msg.status,rep.c_str());
@@ -362,7 +356,7 @@ void comm_with_client(int cfd,ll caesar_key){
           }
           ll pass_hash=power((sum+prime+salt),3,prime);
           if(pass_hash==temp.hash){
-            cout<<"Password matched"<<endl;
+            cout<<"**************Password matched********************"<<endl;
             Msg send_msg;
             send_msg.hdr.opcode=40;
             string rep="YES";
@@ -371,7 +365,7 @@ void comm_with_client(int cfd,ll caesar_key){
             send(cfd,&enc_send_msg,sizeof(enc_send_msg),0);
           }
           else{
-            cout<<"Password not matched"<<endl;
+            cout<<"xxxxxxxxxxxxxx-----------Password not matched-----xxxxxxxxxxxxxxxxxx"<<endl;
             Msg send_msg;
             send_msg.hdr.opcode=40;
             string rep="NO";
