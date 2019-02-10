@@ -9,6 +9,8 @@
 #include <limits>
 #include <math.h>
 #include <random>
+#include <fcntl.h>
+
 #include "diffie_util.hpp"
 #define MAX_SIZE 80
 #define MAX_LEN 1024
@@ -82,6 +84,11 @@ EncMsg encrypt_msg(Msg send_msg,ll caesar_key)
   status=encrypt_util(status,caesar_key);
   strcpy(enc_msg.hdr.opcode,op_code.c_str());
   strcpy(enc_msg.status,status.c_str());
+  if(send_msg.hdr.opcode==60){
+    string temp(send_msg.buf);
+    temp=encrypt_util(temp,caesar_key);
+    strcpy(enc_msg.buf,temp.c_str());
+  }
   return enc_msg;
 }
 
@@ -109,12 +116,14 @@ string encrypt_util(string input,ll caesar_key){
 Msg decrypt_msg(EncMsg enc_msg,ll caesar_key){
 
   Msg dec_msg;
-  string opcode(enc_msg.hdr.opcode);
-  string userid(enc_msg.ID);
-  string password(enc_msg.password);
+  
+  
   string q(enc_msg.q);
+  string opcode(enc_msg.hdr.opcode);
   int op_code=atoi(decrypt_util(opcode,caesar_key).c_str());
   if(op_code==10){
+      string userid(enc_msg.ID);
+      string password(enc_msg.password);
       dec_msg.hdr.opcode=op_code;
       strcpy(dec_msg.ID,decrypt_util(userid,caesar_key).c_str());
       strcpy(dec_msg.password,decrypt_util(password,caesar_key).c_str());
@@ -122,11 +131,15 @@ Msg decrypt_msg(EncMsg enc_msg,ll caesar_key){
   }
   else if(op_code==30){
       dec_msg.hdr.opcode=op_code;
+      string userid(enc_msg.ID);
+      string password(enc_msg.password);
       strcpy(dec_msg.ID,decrypt_util(userid,caesar_key).c_str());
       strcpy(dec_msg.password,decrypt_util(password,caesar_key).c_str());
   }
   else if(op_code==50){
-
+      string filename(enc_msg.file);
+      dec_msg.hdr.opcode=op_code;
+      strcpy(dec_msg.file,decrypt_util(filename,caesar_key).c_str());
   }
 
   return dec_msg;
@@ -363,6 +376,49 @@ void comm_with_client(int cfd,ll caesar_key){
             strcpy(send_msg.status,rep.c_str());
             EncMsg enc_send_msg=encrypt_msg(send_msg,caesar_key);
             send(cfd,&enc_send_msg,sizeof(enc_send_msg),0);
+
+            /* get file name from client */
+            EncMsg enc_recv_msg;
+            recv(cfd,&enc_recv_msg,sizeof(enc_recv_msg),0);
+            Msg dec_recv_msg=decrypt_msg(enc_recv_msg,caesar_key);
+            
+
+            string filename(dec_recv_msg.file);
+            cout<<"received filename:"<<filename<<endl;
+            std::ifstream infile(filename);
+            if(infile.good()){
+              cout<<"Request for file:"<<filename<<endl;
+
+              int s,n;
+              Msg send_msg;
+              send_msg.hdr.opcode=60;
+              int file_read_from=open(filename.c_str(),O_RDONLY);
+              while((n=read(file_read_from,send_msg.buf,sizeof(send_msg.buf)))!=0){
+                cout<<"reading file"<<endl;
+                EncMsg enc_send_msg=encrypt_msg(send_msg,caesar_key);
+                s=send(cfd,&enc_send_msg,sizeof(EncMsg),0);
+                if(s<=0){cout<<"error sending\n";return;}
+              }
+              send_msg.hdr.opcode=0;
+              EncMsg enc_send_msg=encrypt_msg(send_msg,caesar_key);
+              send(cfd,&enc_send_msg,sizeof(EncMsg),0);
+              cout<<"File sending finished"<<endl;
+
+            }
+            else{
+              cout<<"File not found:"<<filename<<endl;
+                Msg send_msg;
+                send_msg.hdr.opcode=0;
+                string rep="NO";
+                strcpy(send_msg.status,rep.c_str());
+                EncMsg enc_send_msg=encrypt_msg(send_msg,caesar_key);
+                int n=send(cfd,&enc_send_msg,sizeof(enc_send_msg),0);
+                if(n<=0){
+                  cout<<"Can't send reply"<<endl;
+                }
+            }
+          
+
           }
           else{
             cout<<"xxxxxxxxxxxxxx-----------Password not matched-----xxxxxxxxxxxxxxxxxx"<<endl;
@@ -375,9 +431,6 @@ void comm_with_client(int cfd,ll caesar_key){
           }
         }
       }
-      else if(opcode==50){
-        
-      }    
   }
 
 }

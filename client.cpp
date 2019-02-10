@@ -10,6 +10,7 @@
 #include <limits>
 #include <math.h>
 #include <random>
+#include <fcntl.h>
 #include "diffie_util.hpp"
 #define MAX_SIZE 80
 #define MAX_LEN 1024
@@ -114,7 +115,13 @@ EncMsg encrypt_msg(Msg send_msg,ll caesar_key)
   }
 
   else if(send_msg.hdr.opcode==50){
-
+    string op_code=to_string(send_msg.hdr.opcode);
+    op_code=encrypt_util(op_code,caesar_key);
+    string filename(send_msg.file);
+    filename=encrypt_util(filename,caesar_key);    
+    strcpy(enc_msg.hdr.opcode,op_code.c_str());
+    strcpy(enc_msg.file,filename.c_str());
+    return enc_msg;
   }
 	return enc_msg;
 }
@@ -125,6 +132,13 @@ Msg decrypt_msg(EncMsg recv_msg,ll caesar_key){
     string temp(recv_msg.hdr.opcode);
     string status(recv_msg.status);
     msg.hdr.opcode=atoi(decrypt_util(temp,caesar_key).c_str());
+    if(msg.hdr.opcode==60){
+      
+      string data(recv_msg.buf);
+      cout<<"Data received"<<recv_msg.buf<<endl;
+      strcpy(msg.buf,decrypt_util(data,caesar_key).c_str());
+      cout<<"decryped data:"<<msg.buf<<endl;
+    }
     strcpy(msg.status,decrypt_util(status,caesar_key).c_str());
     return msg;
 }
@@ -250,10 +264,10 @@ void communicate_with_server(int cfd,ll caesar_key){
       cout<<"LOGIN REPLY:"<<endl;
       string test(dec_recv_msg.status);
       if(test=="NO"){
-        cout<<"xxxxxxxxxxx-----------LOGIN FAILED-------------xxxxxxxxxxxxxx"<<endl;
+        cout<<"xxxxxxxxxxx-----------LOGIN CREATE FAILED-------------xxxxxxxxxxxxxx"<<endl;
       }
       else if(test=="YES"){
-        cout<<"*******************LOGIN SUCCESSFUL*****************"<<endl;
+        cout<<"*******************LOGIN CREATE SUCCESSFUL*****************"<<endl;
       }
       else{
         cout<<"INVALID RESPONSE"<<endl;
@@ -268,33 +282,60 @@ void communicate_with_server(int cfd,ll caesar_key){
         else if(test=="YES"){
           string file_name;
           cout<<"****************AUTH SUCCESSFUL************"<<endl;
-        /*Msg send_msg,recv_msg;
+        Msg send_msg,dec_recv_msg;
+        EncMsg enc_recv_msg,enc_send_msg;
         send_msg.hdr.opcode=50;
         cout<<"Enter file name:"<<endl;
         cin>>file_name;
         strcpy(send_msg.file,file_name.c_str());
-        nbytes=send(cfd, &send_msg,sizeof(Msg),0);
+        enc_send_msg=encrypt_msg(send_msg,caesar_key);
+        nbytes=send(cfd, &enc_send_msg,sizeof(EncMsg),0);
         if (nbytes == -1) {
             fprintf(stderr, "Client error: unable to send\n");
             return;
         }
 
-        nbytes=recv(cfd, &recv_msg,sizeof(Msg),0);
+        nbytes=recv(cfd, &enc_recv_msg,sizeof(EncMsg),0);
         if (nbytes == -1) {
             fprintf(stderr, "Client error: unable to send\n");
             return;
         }
-
-        if(recv_msg.status==0){
-          cout<<"File Not found message"<<endl;
+        dec_recv_msg=decrypt_msg(enc_recv_msg,caesar_key);
+        cout<<"*********SERVER REPLY********************"<<endl;
+        if(dec_recv_msg.hdr.opcode==0){
+          cout<<"File Not found"<<endl;
         }
-        else{
+        else if(dec_recv_msg.hdr.opcode==60){
             cout<<"File Found"<<endl;
-        }*/
+        file_name=file_name+"_copy";
+        int to_file=creat(file_name.c_str(),0777);
+        if(to_file<0){
+          cout<<"Error creating destination file\n";
+          return;
+        }
+        int w,rec;
+        while(rec=recv(cfd,&enc_recv_msg,sizeof(EncMsg),0)){
+          if(rec<0){
+            cout<<"Error receiving\n";
+            return;
+          }
+          
+          Msg dec_recv_msg=decrypt_msg(enc_recv_msg,caesar_key);
+          if(dec_recv_msg.hdr.opcode==60){
+              cout<<"Writing file"<<endl;
+              w=write(to_file,dec_recv_msg.buf,sizeof(dec_recv_msg.buf));
+              if(w<=0){
+                cout<<"writing failed"<<endl;
+              }
+          }
+          else
+              break;
+        }
+        cout<<"File downloading finished"<<endl;
       }    
     }     
   }
-   
+   }
 
 }
 
