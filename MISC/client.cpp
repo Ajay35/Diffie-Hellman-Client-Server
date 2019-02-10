@@ -34,13 +34,13 @@ int d_addr;
 
 typedef struct {
   Hdr hdr;
-  char buf[MAX_LEN];
+  char buf[MAX_LEN+1];
   char ID[MAX_SIZE];
   ll q;
   char password[MAX_SIZE];
   char status[MAX_SIZE];
   char file[MAX_SIZE]; 
-  int dummy;
+  char dummy[MAX_SIZE];
 } Msg;
 
 typedef struct {
@@ -51,7 +51,7 @@ typedef struct {
 
 typedef struct {
   EncHdr hdr;
-  char buf[MAX_LEN];
+  char buf[MAX_LEN+1];
   char ID[MAX_SIZE];
   char q[MAX_SIZE];
   char password[MAX_SIZE];
@@ -72,6 +72,10 @@ string encrypt_util(string input,ll caesar_key){
   s.resize(n,' ');
   for(int i=0;i<n;i++)
 	{
+    if (input[i]==EOF) {
+      cout<<"Rnd of file detected"<<endl;
+      break;
+    }
 		for(int j=0;j<66;j++)
 		{
 			if(input[i]==encoding_scheme[j]){	
@@ -128,17 +132,19 @@ EncMsg encrypt_msg(Msg send_msg,ll caesar_key)
 
 Msg decrypt_msg(EncMsg recv_msg,ll caesar_key){
   
+    
     Msg msg;
     string temp(recv_msg.hdr.opcode);
     string status(recv_msg.status);
     msg.hdr.opcode=atoi(decrypt_util(temp,caesar_key).c_str());
-    if(msg.hdr.opcode==60){
-      
+    if(msg.hdr.opcode==60){  
       string data(recv_msg.buf);
       cout<<"Data received"<<recv_msg.buf<<endl;
       strcpy(msg.buf,decrypt_util(data,caesar_key).c_str());
       cout<<"decryped data:"<<msg.buf<<endl;
+      //cout<<"opcode received:"<<msg.hdr.opcode<<endl;      
     }
+    strcpy(msg.dummy,recv_msg.dummy);
     strcpy(msg.status,decrypt_util(status,caesar_key).c_str());
     return msg;
 }
@@ -304,34 +310,43 @@ void communicate_with_server(int cfd,ll caesar_key){
         cout<<"*********SERVER REPLY********************"<<endl;
         if(dec_recv_msg.hdr.opcode==0){
           cout<<"File Not found"<<endl;
+          exit(0);
         }
-        else if(dec_recv_msg.hdr.opcode==60){
+          else if(dec_recv_msg.hdr.opcode==100){
             cout<<"File Found"<<endl;
-        file_name=file_name+"_copy";
-        int to_file=creat(file_name.c_str(),0777);
-        if(to_file<0){
-          cout<<"Error creating destination file\n";
-          return;
-        }
-        int w,rec;
-        while(rec=recv(cfd,&enc_recv_msg,sizeof(EncMsg),0)){
-          if(rec<0){
-            cout<<"Error receiving\n";
-            return;
-          }
-          
-          Msg dec_recv_msg=decrypt_msg(enc_recv_msg,caesar_key);
-          if(dec_recv_msg.hdr.opcode==60){
-              cout<<"Writing file"<<endl;
-              w=write(to_file,dec_recv_msg.buf,sizeof(dec_recv_msg.buf));
-              if(w<=0){
-                cout<<"writing failed"<<endl;
+            file_name=file_name+"_copy";
+                  
+            int file_size=atoi(dec_recv_msg.dummy);
+
+            cout<<"File size is:"<<file_size<<endl;
+            
+            
+            int to_file=creat(file_name.c_str(),0777);
+            if(to_file<0){
+              cout<<"Error creating destination file\n";
+              return;
+            }
+            
+            int w,rec,total=0;
+            char buf[1024];
+            while(total!=file_size){
+              memset(buf,0,sizeof(buf));
+              rec=recv(cfd,&buf,sizeof(buf),0);
+              if(rec<0){
+                cout<<"Error receiving\n";
+                return ;
               }
-          }
-          else
-              break;
-        }
-        cout<<"File downloading finished"<<endl;
+              cout<<"Encrypted data"<<buf<<endl;
+              string str(buf);
+              cout<<str;
+              str=decrypt_util(str,caesar_key);
+              cout<<"decrypted data:"<<str<<endl;;
+              strcpy(buf,str.c_str());
+              w=write(to_file,buf,rec);
+              total+=rec;
+            }
+
+            cout<<"File downloading finished"<<endl;
       }    
     }     
   }

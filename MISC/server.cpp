@@ -35,13 +35,13 @@ int d_addr;
 
 typedef struct {
   Hdr hdr;
-  char buf[MAX_LEN];
+  char buf[MAX_LEN+1];
   char ID[MAX_SIZE];
   ll q;
   char password[MAX_SIZE];
   char status[MAX_SIZE];
   char file[MAX_SIZE]; 
-  int dummy;
+  char dummy[MAX_SIZE];
 } Msg;
 
 typedef struct{
@@ -59,7 +59,7 @@ typedef struct {
 
 typedef struct {
   EncHdr hdr;
-  char buf[MAX_LEN];
+  char buf[MAX_LEN+1];
   char ID[MAX_SIZE];
   char q[MAX_SIZE];
   char password[MAX_SIZE];
@@ -89,6 +89,10 @@ EncMsg encrypt_msg(Msg send_msg,ll caesar_key)
     temp=encrypt_util(temp,caesar_key);
     strcpy(enc_msg.buf,temp.c_str());
   }
+  if(send_msg.hdr.opcode==100){
+    cout<<"File size send"<<endl;
+    strcpy(enc_msg.dummy,send_msg.dummy);
+  }
   return enc_msg;
 }
 
@@ -99,6 +103,10 @@ string encrypt_util(string input,ll caesar_key){
   s.resize(n,' ');
   for(int i=0;i<n;i++)
 	{
+    if(input[i]==EOF) {
+      cout<<"End of file"<<endl;
+      break;
+    }
 		for(int j=0;j<66;j++)
 		{
 			if(input[i]==encoding_scheme[j])
@@ -162,6 +170,17 @@ string decrypt_util(string input,ll caesar_key){
 	}
 	return s;
 }
+
+int get_file_size(std::string filename)
+{
+    FILE *p_file = NULL;
+    p_file = fopen(filename.c_str(),"rb");
+    fseek(p_file,0,SEEK_END);
+    int size = ftell(p_file);
+    fclose(p_file);
+    return size;
+}
+
 
 
 int start_server()
@@ -388,20 +407,36 @@ void comm_with_client(int cfd,ll caesar_key){
             std::ifstream infile(filename);
             if(infile.good()){
               cout<<"Request for file:"<<filename<<endl;
-
+              int file_size=get_file_size(filename);
+              send_msg.hdr.opcode=100;
+              string fsize=to_string(file_size);
+              strcpy(send_msg.dummy,fsize.c_str());
+              enc_send_msg=encrypt_msg(send_msg,caesar_key);
+              send(cfd,&enc_send_msg,sizeof(enc_send_msg),0);
               int s,n;
               Msg send_msg;
-              send_msg.hdr.opcode=60;
               int file_read_from=open(filename.c_str(),O_RDONLY);
-              while((n=read(file_read_from,send_msg.buf,sizeof(send_msg.buf)))!=0){
-                cout<<"reading file"<<endl;
-                EncMsg enc_send_msg=encrypt_msg(send_msg,caesar_key);
-                s=send(cfd,&enc_send_msg,sizeof(EncMsg),0);
-                if(s<=0){cout<<"error sending\n";return;}
+
+              int w,rec;
+              char buf[1024];
+
+              
+              int total=0;
+
+              while(total!=file_size){
+                  memset(buf,0,sizeof(buf));
+                  
+                  w=read(file_read_from,buf,sizeof(buf));
+                  string temp(buf);
+                  temp=encrypt_util(temp,caesar_key);
+                  cout<<"encrypted data:"<<temp;
+                  strcpy(buf,temp.c_str());
+                  w=write(cfd,buf,w);
+                  cout<<"bytes read:"<<w<<endl;
+                  total+=w;
+                  if(w<0){cout<<"error sending\n";return;}
               }
-              send_msg.hdr.opcode=0;
-              EncMsg enc_send_msg=encrypt_msg(send_msg,caesar_key);
-              send(cfd,&enc_send_msg,sizeof(EncMsg),0);
+              
               cout<<"File sending finished"<<endl;
 
             }
